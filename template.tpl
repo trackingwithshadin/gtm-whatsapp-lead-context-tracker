@@ -5,8 +5,8 @@ ___INFO___
   "id": "cvt_temp_public_id",
   "version": 1,
   "securityGroups": [],
-  "displayName": "WhatsApp & Messenger Lead Context Tracker | Tracking with Shadin",
-  "description": "Generate dynamic WhatsApp/Messenger links that include product name, price, and page URL. Perfect for tracking which item leads were interested in.",
+  "displayName": "WhatsApp \u0026 Messenger Lead Context Tracker | Tracking with Shadin",
+  "description": "Generate dynamic WhatsApp/Messenger links with product and page context for better lead conversion tracking.",
   "containerContexts": [
     "WEB"
   ]
@@ -31,122 +31,107 @@ ___TEMPLATE_PARAMETERS___
         "displayValue": "Messenger"
       }
     ],
-    "simpleValueType": true,
     "defaultValue": "whatsapp"
   },
   {
     "type": "TEXT",
     "name": "targetId",
-    "displayName": "Phone Number (WA) / Username (Messenger)",
-    "simpleValueType": true,
-    "helpHint": "e.g. 8801712345678 (WA) or yourfacebookusername (Messenger)"
+    "displayName": "Phone Number / Username",
+    "helpHint": "e.g. 8801712345678 or mypageusername"
   },
   {
-    "type": "GROUP",
-    "name": "messageSettings",
-    "displayName": "Message Context Settings",
-    "groupStyle": "ZIPPY_CLOSED",
-    "subParams": [
-      {
-        "type": "TEXT",
-        "name": "prefix",
-        "displayName": "Message Prefix",
-        "simpleValueType": true,
-        "defaultValue": "Hi, I am interested in "
-      },
-      {
-        "type": "TEXT",
-        "name": "productName",
-        "displayName": "Product Name Variable",
-        "simpleValueType": true,
-        "helpHint": "e.g. {{dlv - product name}} or {{Page Title}}"
-      },
-      {
-        "type": "CHECKBOX",
-        "name": "includePrice",
-        "displayName": "Include Price in Message?",
-        "simpleValueType": true,
-        "defaultValue": true
-      },
-      {
-        "type": "TEXT",
-        "name": "productPrice",
-        "displayName": "Product Price Variable",
-        "simpleValueType": true,
-        "enablingConditions": [
-          {
-            "elementName": "includePrice",
-            "type": "EQUALS",
-            "checkType": "EQUALS",
-            "value": true
-          }
-        ]
-      },
-      {
-        "type": "CHECKBOX",
-        "name": "includeUrl",
-        "displayName": "Include Page URL?",
-        "simpleValueType": true,
-        "defaultValue": true
-      }
-    ]
+    "type": "TEXT",
+    "name": "prefix",
+    "displayName": "Message Prefix",
+    "defaultValue": "Hi, I am interested in "
+  },
+  {
+    "type": "TEXT",
+    "name": "productName",
+    "displayName": "Product Name",
+    "helpHint": "Variable for product title"
+  },
+  {
+    "type": "TEXT",
+    "name": "productPrice",
+    "displayName": "Product Price",
+    "helpHint": "Variable for product price"
+  },
+  {
+    "type": "CHECKBOX",
+    "name": "includeUrl",
+    "displayName": "Include Link to Page?",
+    "defaultValue": true
   }
 ]
 
 
-___SANDBOX_JS_FOR_WEB_TEMPLATE___
+___SANDBOXED_JS_FOR_WEB_TEMPLATE___
 
 const makeString = require('makeString');
 const encodeUriComponent = require('encodeUriComponent');
-const queryPermission = require('queryPermission');
 const getUrl = require('getUrl');
 
-// 1. Target ID Cleanup
-let target = makeString(data.targetId || '').trim();
-if (!target) return undefined;
+// 1. Target Validation
+if (!data.targetId) return undefined;
+let target = makeString(data.targetId).trim();
 
-// For WhatsApp: remove all non-digits (except maybe +)
 if (data.platform === 'whatsapp') {
-  let cleanWa = '';
+  let clean = '';
   for (let i = 0; i < target.length; i++) {
-    const char = target[i];
-    if (char >= '0' && char <= '9') cleanWa += char;
+    const c = target[i];
+    if (c >= '0' && c <= '9') clean += c;
   }
-  target = cleanWa;
+  target = clean;
 }
 
-// 2. Build Message
-let message = makeString(data.prefix || '');
-const product = makeString(data.productName || '');
-const price = makeString(data.productPrice || '');
-
-if (product) {
-  message += product;
+// 2. EXTRACTION LOGIC (Handle GTM "undefined" strings)
+let pName = '';
+if (data.productName) {
+  pName = makeString(data.productName).trim();
 }
 
-if (data.includePrice && price) {
-  message += ' priced at ' + price;
+// Check for GTM specific empty states
+if (!pName || pName === 'undefined' || pName === 'null' || pName === '[object Object]') {
+  pName = ''; 
+}
+
+let pPrice = '';
+if (data.productPrice) {
+  pPrice = makeString(data.productPrice).trim();
+}
+
+if (!pPrice || pPrice === 'undefined' || pPrice === 'null' || pPrice === '[object Object]') {
+  pPrice = '';
+}
+
+// 3. Build Sentence
+let msg = makeString(data.prefix || 'Hi, I am interested in ');
+
+if (pName) {
+  msg += pName;
+} else {
+  msg += 'this product';
+}
+
+if (pPrice) {
+  msg += ' at price ' + pPrice;
 }
 
 if (data.includeUrl) {
-  const currentUrl = getUrl();
-  if (currentUrl) {
-    message += '. Reference URL: ' + currentUrl;
+  const url = getUrl();
+  if (url) {
+    msg += '. Source: ' + url;
   }
 }
 
-// 3. Construct Final URL
-const encodedMessage = encodeUriComponent(message.trim());
+const finalMsg = encodeUriComponent(msg.trim());
 
 if (data.platform === 'whatsapp') {
-  return 'https://wa.me/' + target + '/?text=' + encodedMessage;
+  return 'https://wa.me/' + target + '/?text=' + finalMsg;
 }
 
-if (data.platform === 'messenger') {
-  // Messenger doesn't support pre-filled text in same way as WA natively via URL
-  // But we return a clean link. If context is needed, usually it's better via ref or just the link.
-  return 'https://m.me/' + target;
-}
+return 'https://m.me/' + target;
 
 return undefined;
 
@@ -167,13 +152,6 @@ ___WEB_PERMISSIONS___
             "type": 1,
             "string": "any"
           }
-        },
-        {
-          "key": "queries",
-          "value": {
-            "type": 1,
-            "string": "any"
-          }
         }
       ]
     },
@@ -189,7 +167,7 @@ scenarios: []
 
 ___NOTES___
 
-Dynamic Lead Context Tracker for WhatsApp and Messenger. Helps business owners know exactly which product sparked user interest.
+Optimized version to fix "Invalid/missing string" error by cleaning up parameter structure and JS logic.
 
 
 ___TERMS_OF_SERVICE___
