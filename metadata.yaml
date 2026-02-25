@@ -1,0 +1,5 @@
+homepage: "https://www.linkedin.com/in/sadikulshadin/"
+documentation: "https://github.com/trackingwithshadin/gtm-whatsapp-lead-context-tracker"
+versions:
+  - sha: "main"
+    changeNotes: "Initial release. Dynamically appends product name, price, and URL to WhatsApp links for better lead context."
